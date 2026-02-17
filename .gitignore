@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Models (large files)
+models/ltx2/
+models/svd/
+models/hf_cache/
+
+# Outputs
+outputs/*.mp4
+outputs/*.jpg
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
