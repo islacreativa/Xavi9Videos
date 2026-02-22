@@ -17,11 +17,14 @@ class Settings(BaseSettings):
     outputs_dir: Path = Path("/app/outputs")
 
     # LTX-2 defaults
-    ltx2_model_id: str = "Lightricks/LTX-Video-2.0-distilled"
-    ltx2_use_fp8: bool = True
+    ltx2_model_id: str = "Lightricks/LTX-2"
+    ltx2_use_fp8: bool = False  # Not needed with bfloat16 on 128GB
 
     # SVD-XT defaults
     svd_model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt"
+
+    # Wan 2.1 defaults
+    wan_model_id: str = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
 
     # Generation defaults
     default_width: int = 768
@@ -38,6 +41,11 @@ class Settings(BaseSettings):
 
     # NGC
     ngc_api_key: str = ""
+
+    # NVIDIA Build API (build.nvidia.com)
+    nvidia_api_key: str = ""
+    nvidia_api_url: str = "https://ai.api.nvidia.com"
+    nvidia_api_timeout: float = 600.0
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

@@ -11,14 +11,24 @@ from app.config import settings
 MODEL_CHOICES = [
     "Cosmos Text2World",
     "Cosmos Video2World",
+    "Cloud: Cosmos Text2World",
+    "Cloud: Cosmos Video2World",
     "LTX-2",
     "SVD-XT",
+    "Wan 2.1",
 ]
 
 # Models that require an image
-IMAGE_REQUIRED_MODELS = {"Cosmos Video2World", "SVD-XT"}
+IMAGE_REQUIRED_MODELS = {"Cosmos Video2World", "Cloud: Cosmos Video2World", "SVD-XT"}
 # Models that support text prompts
-TEXT_MODELS = {"Cosmos Text2World", "Cosmos Video2World", "LTX-2"}
+TEXT_MODELS = {
+    "Cosmos Text2World",
+    "Cosmos Video2World",
+    "Cloud: Cosmos Text2World",
+    "Cloud: Cosmos Video2World",
+    "LTX-2",
+    "Wan 2.1",
+}
 # Models with fixed resolution
 FIXED_RESOLUTION_MODELS = {"SVD-XT"}
 
@@ -53,9 +63,39 @@ def _format_json(data) -> str:
 def build_ui(generate_fn, health_check_fn):
     """Build and return the Gradio Blocks interface."""
 
-    # Wrap generate_fn to convert dict output to JSON string
-    async def wrapped_generate(*args):
-        result = await generate_fn(*args)
+    # Wrap generate_fn to convert duration to num_frames and add progress
+    async def wrapped_generate(
+        progress=gr.Progress(track_tqdm=True),
+        model_name="",
+        prompt="",
+        image=None,
+        width=768,
+        height=512,
+        duration_seconds=2.0,
+        fps=24,
+        num_inference_steps=30,
+        guidance_scale=3.0,
+        seed=-1,
+    ):
+        def progress_callback(step, total):
+            progress(step / total, desc=f"Step {step}/{total}")
+
+        # Convert duration (seconds) to num_frames
+        num_frames = max(9, round(duration_seconds * fps) + 1)
+
+        result = await generate_fn(
+            model_name,
+            prompt,
+            image,
+            width,
+            height,
+            num_frames,
+            fps,
+            num_inference_steps,
+            guidance_scale,
+            seed,
+            progress_callback=progress_callback,
+        )
         video_path, metadata, status = result
         return video_path, _format_json(metadata), status
 
@@ -69,9 +109,7 @@ def build_ui(generate_fn, health_check_fn):
         theme=gr.themes.Soft(),
     ) as demo:
         gr.Markdown(
-            "# Xavi9Videos\n"
-            "AI Video Generation on NVIDIA DGX Spark | "
-            "Cosmos - LTX-2 - SVD-XT"
+            "# Xavi9Videos\nAI Video Generation on NVIDIA DGX Spark | Cosmos - LTX-2 - SVD-XT - Wan 2.1"
         )
 
         with gr.Row():
@@ -98,42 +136,59 @@ def build_ui(generate_fn, health_check_fn):
                 with gr.Accordion("Generation Parameters", open=False):
                     with gr.Row():
                         width_input = gr.Slider(
-                            256, 1920, value=settings.default_width,
-                            step=64, label="Width",
+                            256,
+                            1920,
+                            value=settings.default_width,
+                            step=64,
+                            label="Width",
                         )
                         height_input = gr.Slider(
-                            256, 1080, value=settings.default_height,
-                            step=64, label="Height",
+                            256,
+                            1080,
+                            value=settings.default_height,
+                            step=64,
+                            label="Height",
                         )
 
-                    num_frames_input = gr.Slider(
-                        9, 121, value=settings.default_num_frames,
-                        step=8, label="Number of Frames",
+                    duration_input = gr.Slider(
+                        0.5,
+                        10.0,
+                        value=round(settings.default_num_frames / settings.default_fps, 1),
+                        step=0.5,
+                        label="Duration (seconds)",
                     )
 
                     with gr.Row():
                         fps_input = gr.Slider(
-                            7, 50, value=settings.default_fps,
-                            step=1, label="FPS",
+                            7,
+                            50,
+                            value=settings.default_fps,
+                            step=1,
+                            label="FPS",
                         )
                         steps_input = gr.Slider(
-                            10, 100, value=settings.default_num_inference_steps,
-                            step=5, label="Inference Steps",
+                            10,
+                            100,
+                            value=settings.default_num_inference_steps,
+                            step=5,
+                            label="Inference Steps",
                         )
 
                     guidance_input = gr.Slider(
-                        1.0, 15.0, value=settings.default_guidance_scale,
-                        step=0.5, label="Guidance Scale",
+                        1.0,
+                        15.0,
+                        value=settings.default_guidance_scale,
+                        step=0.5,
+                        label="Guidance Scale",
                     )
 
                     seed_input = gr.Number(
-                        value=-1, label="Seed (-1 = random)",
+                        value=-1,
+                        label="Seed (-1 = random)",
                         precision=0,
                     )
 
-                generate_btn = gr.Button(
-                    "Generate Video", variant="primary", size="lg"
-                )
+                generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
 
                 with gr.Row():
                     health_btn = gr.Button("Check Model Health", size="sm")
@@ -190,7 +245,7 @@ def build_ui(generate_fn, health_check_fn):
                 image_input,
                 width_input,
                 height_input,
-                num_frames_input,
+                duration_input,
                 fps_input,
                 guidance_input,
             ],
@@ -204,7 +259,7 @@ def build_ui(generate_fn, health_check_fn):
                 image_input,
                 width_input,
                 height_input,
-                num_frames_input,
+                duration_input,
                 fps_input,
                 steps_input,
                 guidance_input,
