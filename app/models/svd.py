@@ -74,8 +74,7 @@ class SVDModel(BaseVideoModel):
             source,
             torch_dtype=torch.float16,
             variant="fp16",
-        )
-        self._pipeline.enable_model_cpu_offload()
+        ).to("cuda")
 
     async def unload(self) -> None:
         if not self._loaded:
@@ -98,9 +97,7 @@ class SVDModel(BaseVideoModel):
 
         loop = asyncio.get_event_loop()
         start = time.time()
-        output_path = await loop.run_in_executor(
-            None, self._generate_sync, request
-        )
+        output_path = await loop.run_in_executor(None, self._generate_sync, request)
         elapsed = time.time() - start
 
         return GenerationResult(
@@ -140,9 +137,7 @@ class SVDModel(BaseVideoModel):
         return output_path
 
     @staticmethod
-    def _save_frames_to_video(
-        frames: list[Image.Image], path: Path, fps: int
-    ) -> None:
+    def _save_frames_to_video(frames: list[Image.Image], path: Path, fps: int) -> None:
         import imageio
         import numpy as np
 

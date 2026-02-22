@@ -1,27 +1,29 @@
 services:
-  cosmos-nim:
-    image: nvcr.io/nim/nvidia/cosmos-predict1:1.0.0
-    runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    ports:
-      - "8000:8000"
-    volumes:
-      - nim_cache:/opt/nim/.cache
-    environment:
-      - NGC_API_KEY=${NGC_API_KEY}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 300s
-    restart: unless-stopped
+  # Cosmos NIM - disabled: no ARM64 image available for DGX Spark
+  # Uncomment when nvcr.io/nim/nvidia/cosmos-predict1 supports aarch64
+  # cosmos-nim:
+  #   image: nvcr.io/nim/nvidia/cosmos-predict1:1.0.0
+  #   runtime: nvidia
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - nim_cache:/opt/nim/.cache
+  #   environment:
+  #     - NGC_API_KEY=${NGC_API_KEY}
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health/ready"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 20
+  #     start_period: 300s
+  #   restart: unless-stopped
 
   xavi9videos-app:
     build:
@@ -42,16 +44,14 @@ services:
       - outputs:/app/outputs
     environment:
       - NGC_API_KEY=${NGC_API_KEY}
-      - COSMOS_NIM_URL=http://cosmos-nim:8000
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - FAL_API_KEY=${FAL_API_KEY:-}
+      - COSMOS_NIM_URL=${COSMOS_NIM_URL:-}
       - MODELS_DIR=/app/models
       - OUTPUTS_DIR=/app/outputs
       - HF_HOME=/app/models/hf_cache
-    depends_on:
-      cosmos-nim:
-        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  nim_cache:
   models_cache:
   outputs:

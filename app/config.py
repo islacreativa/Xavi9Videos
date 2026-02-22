@@ -42,10 +42,13 @@ class Settings(BaseSettings):
     # NGC
     ngc_api_key: str = ""
 
-    # NVIDIA Build API (build.nvidia.com)
-    nvidia_api_key: str = ""
-    nvidia_api_url: str = "https://ai.api.nvidia.com"
-    nvidia_api_timeout: float = 600.0
+    # Grok Imagine (xAI)
+    grok_api_key: str = ""
+    grok_api_timeout: float = 600.0
+
+    # fal.ai (LTX-2 Pro cloud)
+    fal_api_key: str = ""
+    fal_api_timeout: float = 600.0
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

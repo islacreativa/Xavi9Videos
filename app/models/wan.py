@@ -1,4 +1,4 @@
-"""LTX-2 local inference (text-to-video and image-to-video with audio)."""
+"""Wan 2.1 Video local inference (text-to-video and image-to-video)."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 
-class LTX2Model(BaseVideoModel):
-    """LTX-2 19B for DGX Spark (130GB unified memory)."""
+class WanModel(BaseVideoModel):
+    """Wan 2.1 video generation (14B T2V / I2V 720p)."""
 
     def __init__(self) -> None:
         self._pipeline = None
@@ -30,7 +30,7 @@ class LTX2Model(BaseVideoModel):
 
     @property
     def name(self) -> str:
-        return "LTX-2"
+        return "Wan 2.1"
 
     @property
     def supported_modes(self) -> list[ModelMode]:
@@ -48,23 +48,24 @@ class LTX2Model(BaseVideoModel):
         if self._loaded:
             return
 
-        logger.info("Loading LTX-2 pipeline...")
+        logger.info("Loading Wan 2.1 pipeline...")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._load_sync)
         self._loaded = True
-        logger.info("LTX-2 pipeline loaded.")
+        logger.info("Wan 2.1 pipeline loaded.")
 
     def _load_sync(self) -> None:
-        from diffusers.pipelines.ltx2 import LTX2Pipeline
+        from diffusers import AutoencoderKLWan, WanPipeline
 
-        model_path = settings.ltx2_local_path
-        if model_path.exists() and (model_path / "model_index.json").exists():
-            source = str(model_path)
-        else:
-            source = settings.ltx2_model_id
-
-        self._pipeline = LTX2Pipeline.from_pretrained(
-            source,
+        model_id = settings.wan_model_id
+        vae = AutoencoderKLWan.from_pretrained(
+            model_id,
+            subfolder="vae",
+            torch_dtype=torch.float32,
+        )
+        self._pipeline = WanPipeline.from_pretrained(
+            model_id,
+            vae=vae,
             torch_dtype=torch.bfloat16,
         ).to("cuda")
 
@@ -72,20 +73,20 @@ class LTX2Model(BaseVideoModel):
         if not self._loaded:
             return
 
-        logger.info("Unloading LTX-2...")
+        logger.info("Unloading Wan 2.1...")
         self._pipeline = None
         self._loaded = False
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-        logger.info("LTX-2 unloaded, GPU memory freed.")
+        logger.info("Wan 2.1 unloaded, GPU memory freed.")
 
     async def generate(
         self, request: GenerationRequest, progress_callback=None
     ) -> GenerationResult:
         if not self._loaded or self._pipeline is None:
-            raise RuntimeError("LTX-2 model not loaded. Call load() first.")
+            raise RuntimeError("Wan 2.1 model not loaded. Call load() first.")
 
         loop = asyncio.get_event_loop()
         start = time.time()
@@ -116,9 +117,13 @@ class LTX2Model(BaseVideoModel):
             generator = torch.Generator(device="cpu").manual_seed(request.seed)
 
         negative_prompt = (
-            "shaky, glitchy, low quality, worst quality, deformed, "
-            "distorted, disfigured, motion smear, motion artifacts, "
-            "fused fingers, bad anatomy, weird hand, ugly, transition, static."
+            "Bright tones, overexposed, static, blurred details, "
+            "subtitles, style, works, paintings, images, static, "
+            "overall gray, worst quality, low quality, JPEG artifacts, "
+            "ugly, incomplete, extra fingers, poorly drawn hands, "
+            "poorly drawn faces, deformed, disfigured, misshapen limbs, "
+            "fused fingers, still picture, messy background, "
+            "three legs, many people in the background, walking backwards"
         )
 
         kwargs = {
@@ -127,49 +132,28 @@ class LTX2Model(BaseVideoModel):
             "width": request.width,
             "height": request.height,
             "num_frames": request.num_frames,
-            "frame_rate": float(request.fps),
             "guidance_scale": request.guidance_scale,
             "num_inference_steps": request.num_inference_steps,
             "generator": generator,
-            "output_type": "np",
-            "return_dict": False,
         }
 
         if progress_callback is not None:
             total_steps = request.num_inference_steps
 
-            def callback_on_step(pipe, step, timestep, kwargs):
+            def callback_on_step(pipe, step, timestep, cb_kwargs):
                 progress_callback(step + 1, total_steps)
-                return kwargs
+                return cb_kwargs
 
             kwargs["callback_on_step_end"] = callback_on_step
 
-        if request.image is not None:
-            # Switch to image-to-video pipeline
-            from diffusers.pipelines.ltx2 import LTX2ImageToVideoPipeline
+        output = self._pipeline(**kwargs)
+        frames = output.frames[0]
 
-            # Reuse components from text pipeline
-            i2v_pipe = LTX2ImageToVideoPipeline(**self._pipeline.components)
-            kwargs["image"] = request.image
-            video, audio = i2v_pipe(**kwargs)
-        else:
-            video, audio = self._pipeline(**kwargs)
+        output_path = settings.outputs_dir / f"wan_{int(time.time())}.mp4"
 
-        output_path = settings.outputs_dir / f"ltx2_{int(time.time())}.mp4"
+        from diffusers.utils import export_to_video
 
-        from diffusers.pipelines.ltx2.export_utils import encode_video
-
-        encode_video(
-            video[0],
-            fps=float(request.fps),
-            audio=audio[0].float().cpu() if audio is not None else None,
-            audio_sample_rate=(
-                self._pipeline.vocoder.config.output_sampling_rate
-                if hasattr(self._pipeline, "vocoder") and self._pipeline.vocoder is not None
-                else 24000
-            ),
-            output_path=str(output_path),
-        )
+        export_to_video(frames, str(output_path), fps=request.fps)
 
         return output_path
 
@@ -177,13 +161,10 @@ class LTX2Model(BaseVideoModel):
         if self._loaded:
             status = "ready"
         else:
-            model_path = settings.ltx2_local_path
-            has_weights = model_path.exists() and any(model_path.iterdir())
-            status = "available" if has_weights else "weights_missing"
+            status = "available"
 
         return {
             "status": status,
             "model": self.name,
             "loaded": self._loaded,
-            "fp8": settings.ltx2_use_fp8,
         }

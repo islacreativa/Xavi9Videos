@@ -3,7 +3,7 @@
 import pytest
 
 from app.models import GenerationRequest, ModelMode
-from app.models.svd import SVDModel, SVD_WIDTH, SVD_HEIGHT, SVD_NUM_FRAMES
+from app.models.svd import SVD_HEIGHT, SVD_NUM_FRAMES, SVD_WIDTH, SVDModel
 
 
 @pytest.fixture
@@ -30,6 +30,7 @@ async def test_generate_requires_image(svd):
 @pytest.mark.asyncio
 async def test_generate_not_loaded(svd):
     from PIL import Image
+
     img = Image.new("RGB", (512, 512))
     req = GenerationRequest(image=img)
     with pytest.raises(RuntimeError, match="not loaded"):

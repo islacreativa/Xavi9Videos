@@ -5,11 +5,8 @@ from __future__ import annotations
 import base64
 import io
 import time
-from pathlib import Path
-from typing import Optional
 
 import httpx
-from PIL import Image
 
 from app.config import settings
 from app.models import (
@@ -67,9 +64,7 @@ class CosmosText2World(BaseVideoModel):
         data = response.json()
         video_bytes = base64.b64decode(data["video"])
 
-        output_path = (
-            settings.outputs_dir / f"cosmos_t2w_{int(time.time())}.mp4"
-        )
+        output_path = settings.outputs_dir / f"cosmos_t2w_{int(time.time())}.mp4"
         output_path.write_bytes(video_bytes)
 
         return GenerationResult(
@@ -143,9 +138,7 @@ class CosmosVideo2World(BaseVideoModel):
         data = response.json()
         video_bytes = base64.b64decode(data["video"])
 
-        output_path = (
-            settings.outputs_dir / f"cosmos_v2w_{int(time.time())}.mp4"
-        )
+        output_path = settings.outputs_dir / f"cosmos_v2w_{int(time.time())}.mp4"
         output_path.write_bytes(video_bytes)
 
         return GenerationResult(

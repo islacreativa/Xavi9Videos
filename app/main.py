@@ -33,11 +33,9 @@ from app.models import (  # noqa: E402
     generation_lock,
 )
 from app.models.cosmos import CosmosText2World, CosmosVideo2World  # noqa: E402
+from app.models.fal_ltx2 import FalLTX2ImageToVideo, FalLTX2TextToVideo  # noqa: E402
+from app.models.grok import GrokVideoModel  # noqa: E402
 from app.models.ltx2 import LTX2Model  # noqa: E402
-from app.models.nvidia_build import (  # noqa: E402
-    NvidiaBuildText2World,
-    NvidiaBuildVideo2World,
-)
 from app.models.svd import SVDModel  # noqa: E402
 from app.models.wan import WanModel  # noqa: E402
 from app.ui.components import build_ui  # noqa: E402
@@ -89,13 +87,20 @@ if settings.cosmos_nim_url:
 else:
     logger.info("Cosmos models disabled (COSMOS_NIM_URL not set)")
 
-# NVIDIA Build API cloud models (requires API key)
-if settings.nvidia_api_key:
-    models["Cloud: Cosmos Text2World"] = NvidiaBuildText2World()
-    models["Cloud: Cosmos Video2World"] = NvidiaBuildVideo2World()
-    logger.info("NVIDIA Build API models enabled (cloud)")
+# Grok Imagine cloud model (requires xAI API key)
+if settings.grok_api_key:
+    models["Cloud: Grok Video"] = GrokVideoModel()
+    logger.info("Grok Video model enabled (cloud)")
 else:
-    logger.info("NVIDIA Build API models disabled (NVIDIA_API_KEY not set)")
+    logger.info("Grok Video model disabled (GROK_API_KEY not set)")
+
+# fal.ai LTX-2 Pro cloud models (requires fal.ai API key)
+if settings.fal_api_key:
+    models["Cloud: LTX-2 Pro"] = FalLTX2TextToVideo()
+    models["Cloud: LTX-2 Pro I2V"] = FalLTX2ImageToVideo()
+    logger.info("fal.ai LTX-2 Pro models enabled (cloud)")
+else:
+    logger.info("fal.ai LTX-2 Pro models disabled (FAL_API_KEY not set)")
 
 # Local models always available
 models["LTX-2"] = LTX2Model()

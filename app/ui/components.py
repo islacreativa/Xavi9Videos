@@ -11,21 +11,22 @@ from app.config import settings
 MODEL_CHOICES = [
     "Cosmos Text2World",
     "Cosmos Video2World",
-    "Cloud: Cosmos Text2World",
-    "Cloud: Cosmos Video2World",
+    "Cloud: Grok Video",
+    "Cloud: LTX-2 Pro",
+    "Cloud: LTX-2 Pro I2V",
     "LTX-2",
     "SVD-XT",
     "Wan 2.1",
 ]
 
 # Models that require an image
-IMAGE_REQUIRED_MODELS = {"Cosmos Video2World", "Cloud: Cosmos Video2World", "SVD-XT"}
+IMAGE_REQUIRED_MODELS = {"Cosmos Video2World", "Cloud: LTX-2 Pro I2V", "SVD-XT"}
 # Models that support text prompts
 TEXT_MODELS = {
     "Cosmos Text2World",
     "Cosmos Video2World",
-    "Cloud: Cosmos Text2World",
-    "Cloud: Cosmos Video2World",
+    "Cloud: Grok Video",
+    "Cloud: LTX-2 Pro",
     "LTX-2",
     "Wan 2.1",
 }
@@ -42,7 +43,7 @@ def update_ui_visibility(model_name: str) -> dict:
 
     return {
         "prompt_visible": has_text,
-        "image_visible": needs_image or model_name == "LTX-2",
+        "image_visible": needs_image or model_name in {"LTX-2", "Cloud: Grok Video"},
         "image_required": needs_image,
         "resolution_visible": has_resolution,
         "frames_visible": not is_svd,
@@ -109,7 +110,7 @@ def build_ui(generate_fn, health_check_fn):
         theme=gr.themes.Soft(),
     ) as demo:
         gr.Markdown(
-            "# Xavi9Videos\nAI Video Generation on NVIDIA DGX Spark | Cosmos - LTX-2 - SVD-XT - Wan 2.1"
+            "# Xavi9Videos\nAI Video Generation on NVIDIA DGX Spark | Grok - LTX-2 - SVD-XT - Wan 2.1"
         )
 
         with gr.Row():

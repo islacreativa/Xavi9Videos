@@ -3,9 +3,7 @@
 import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
-from PIL import Image
 
 from app.models import GenerationRequest
 from app.models.cosmos import CosmosText2World, CosmosVideo2World
@@ -63,8 +61,10 @@ async def test_text2world_generate_success(text2world, tmp_path):
     mock_response.json.return_value = {"video": fake_video}
     mock_response.raise_for_status = MagicMock()
 
-    with patch.object(text2world, "_get_client") as mock_client_fn, \
-         patch("app.models.cosmos.settings") as mock_settings:
+    with (
+        patch.object(text2world, "_get_client") as mock_client_fn,
+        patch("app.models.cosmos.settings") as mock_settings,
+    ):
         mock_settings.outputs_dir = tmp_path
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)

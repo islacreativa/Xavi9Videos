@@ -132,6 +132,7 @@ Xavi9Videos/
 1. Crear `docker-compose.yml`
 2. Crear `Dockerfile`
 3. Crear `requirements.txt`
+
 4. Crear `.env.example`
 5. Crear `scripts/setup.sh` y `scripts/download_models.sh`
 

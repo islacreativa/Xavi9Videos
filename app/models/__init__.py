@@ -1,4 +1,24 @@
-"""Video model abstractions, dataclasses, and shared lock."""
+"""Video model abstractions, dataclasses, and shared lock.
+
+Adding a new model
+==================
+1. Create ``app/models/<name>.py`` with a class that inherits ``BaseVideoModel``.
+2. Implement the four abstract members:
+   - ``name`` (property) - human-readable name shown in the UI.
+   - ``supported_modes`` (property) - list of ``ModelMode`` values.
+   - ``generate(request)`` - produce a video and return ``GenerationResult``.
+   - ``health_check()`` - return a dict with at least ``{"status": ..., "model": ...}``.
+3. For **local** models (running on the GPU), also override:
+   - ``is_local`` → ``True``
+   - ``is_loaded`` - whether the pipeline is in memory.
+   - ``load()`` / ``unload()`` - manage GPU memory.
+4. Register the model in ``app/main.py`` by adding it to the ``models`` dict.
+5. Add the model name to ``MODEL_CHOICES`` in ``app/ui/components.py``.
+6. (Optional) Add config fields in ``app/config.py`` (model ID, local path, etc.).
+
+See ``app/models/ltx2.py`` (local, text+image) and ``app/models/cosmos.py``
+(remote NIM API) as reference implementations.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +27,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
 
 from PIL import Image
 
@@ -22,7 +41,7 @@ class GenerationRequest:
     """Parameters for a video generation request."""
 
     prompt: str = ""
-    image: Optional[Image.Image] = None
+    image: Image.Image | None = None
     width: int = 768
     height: int = 512
     num_frames: int = 49
@@ -64,10 +83,10 @@ class BaseVideoModel(ABC):
     async def health_check(self) -> dict:
         """Return health status of the model."""
 
-    async def load(self) -> None:
+    async def load(self) -> None:  # noqa: B027
         """Load model into GPU memory. Override for local models."""
 
-    async def unload(self) -> None:
+    async def unload(self) -> None:  # noqa: B027
         """Unload model from GPU memory. Override for local models."""
 
     @property

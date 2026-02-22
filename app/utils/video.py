@@ -6,7 +6,6 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,10 @@ def get_video_info(path: Path) -> dict:
         result = subprocess.run(
             [
                 "ffprobe",
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
                 "-show_streams",
                 str(path),
@@ -59,9 +60,12 @@ def generate_thumbnail(video_path: Path, output_path: Path | None = None) -> Pat
             [
                 "ffmpeg",
                 "-y",
-                "-i", str(video_path),
-                "-vframes", "1",
-                "-q:v", "2",
+                "-i",
+                str(video_path),
+                "-vframes",
+                "1",
+                "-q:v",
+                "2",
                 str(output_path),
             ],
             capture_output=True,

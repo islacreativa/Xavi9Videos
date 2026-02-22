@@ -1,7 +1,6 @@
 """Tests for app.utils.storage."""
 
 import time
-from pathlib import Path
 from unittest.mock import patch
 
 from app.utils.storage import cleanup_old_outputs, get_gallery_items, get_output_files
