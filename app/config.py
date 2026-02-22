@@ -50,7 +50,12 @@ class Settings(BaseSettings):
     fal_api_key: str = ""
     fal_api_timeout: float = 600.0
 
-    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+    model_config = {
+        "env_prefix": "",
+        "env_file": ".env",
+        "extra": "ignore",
+        "validate_assignment": True,
+    }
 
     @property
     def ltx2_local_path(self) -> Path:

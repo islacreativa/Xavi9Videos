@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import traceback
+from pathlib import Path
 
 # Patch gradio_client bug with additionalProperties: true on Python 3.9
 import gradio_client.utils as _gc_utils
@@ -23,6 +24,7 @@ def _patched_json_schema(schema, defs):
 
 _gc_utils._json_schema_to_python_type = _patched_json_schema
 
+import gradio as gr  # noqa: E402
 from PIL import Image  # noqa: E402
 
 from app.config import settings  # noqa: E402
@@ -38,7 +40,7 @@ from app.models.grok import GrokVideoModel  # noqa: E402
 from app.models.ltx2 import LTX2Model  # noqa: E402
 from app.models.svd import SVDModel  # noqa: E402
 from app.models.wan import WanModel  # noqa: E402
-from app.ui.components import build_ui  # noqa: E402
+from app.ui.components import MODEL_CHOICES, build_ui  # noqa: E402
 from app.utils.storage import cleanup_old_outputs  # noqa: E402
 
 
@@ -109,6 +111,136 @@ models["Wan 2.1"] = WanModel()
 
 # Track which local model is currently loaded
 _current_local_model: str | None = None
+
+
+def _write_env_file(updates: dict[str, str]) -> None:
+    """Read existing .env, update/add keys, write back."""
+    env_path = Path(".env")
+    lines: list[str] = []
+    existing_keys: set[str] = set()
+
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key in updates:
+                    existing_keys.add(key)
+                    lines.append(f"{key}={updates[key]}")
+                    continue
+            lines.append(line)
+
+    for key, value in updates.items():
+        if key not in existing_keys:
+            lines.append(f"{key}={value}")
+
+    env_path.write_text("\n".join(lines) + "\n")
+
+
+def get_available_model_choices() -> list[str]:
+    """Return MODEL_CHOICES filtered to only models currently registered."""
+    return [c for c in MODEL_CHOICES if c in models]
+
+
+def _mask_key(key: str) -> str:
+    """Mask an API key for display, showing only last 4 chars."""
+    if not key:
+        return ""
+    if len(key) <= 4:
+        return "****"
+    return "****" + key[-4:]
+
+
+def save_settings(
+    grok_key: str,
+    fal_key: str,
+    ngc_key: str,
+    models_dir_str: str,
+    outputs_dir_str: str,
+) -> tuple[str, dict]:
+    """Save settings to .env, update runtime config, re-register cloud models.
+
+    Returns (status_message, dropdown_update).
+    """
+    changes: list[str] = []
+    env_updates: dict[str, str] = {}
+
+    # Only update API keys if they were actually changed (not masked)
+    if grok_key and not grok_key.startswith("****"):
+        settings.grok_api_key = grok_key
+        env_updates["GROK_API_KEY"] = grok_key
+        os.environ["GROK_API_KEY"] = grok_key
+    if fal_key and not fal_key.startswith("****"):
+        settings.fal_api_key = fal_key
+        env_updates["FAL_API_KEY"] = fal_key
+        os.environ["FAL_API_KEY"] = fal_key
+    if ngc_key and not ngc_key.startswith("****"):
+        settings.ngc_api_key = ngc_key
+        env_updates["NGC_API_KEY"] = ngc_key
+        os.environ["NGC_API_KEY"] = ngc_key
+
+    # Handle clearing keys (empty field when previously set)
+    if grok_key == "" and settings.grok_api_key:
+        settings.grok_api_key = ""
+        env_updates["GROK_API_KEY"] = ""
+        os.environ.pop("GROK_API_KEY", None)
+    if fal_key == "" and settings.fal_api_key:
+        settings.fal_api_key = ""
+        env_updates["FAL_API_KEY"] = ""
+        os.environ.pop("FAL_API_KEY", None)
+    if ngc_key == "" and settings.ngc_api_key:
+        settings.ngc_api_key = ""
+        env_updates["NGC_API_KEY"] = ""
+        os.environ.pop("NGC_API_KEY", None)
+
+    # Update paths
+    if models_dir_str:
+        new_models_dir = Path(models_dir_str)
+        if new_models_dir != settings.models_dir:
+            settings.models_dir = new_models_dir
+            env_updates["MODELS_DIR"] = models_dir_str
+            changes.append(f"Models dir: {models_dir_str}")
+    if outputs_dir_str:
+        new_outputs_dir = Path(outputs_dir_str)
+        if new_outputs_dir != settings.outputs_dir:
+            settings.outputs_dir = new_outputs_dir
+            env_updates["OUTPUTS_DIR"] = outputs_dir_str
+            settings.outputs_dir.mkdir(parents=True, exist_ok=True)
+            changes.append(f"Outputs dir: {outputs_dir_str}")
+
+    # Re-register/unregister cloud models based on current keys
+    if settings.grok_api_key and "Cloud: Grok Video" not in models:
+        models["Cloud: Grok Video"] = GrokVideoModel()
+        changes.append("Grok Video model enabled")
+    elif not settings.grok_api_key and "Cloud: Grok Video" in models:
+        del models["Cloud: Grok Video"]
+        changes.append("Grok Video model disabled")
+
+    if settings.fal_api_key:
+        if "Cloud: LTX-2 Pro" not in models:
+            models["Cloud: LTX-2 Pro"] = FalLTX2TextToVideo()
+            models["Cloud: LTX-2 Pro I2V"] = FalLTX2ImageToVideo()
+            changes.append("fal.ai LTX-2 Pro models enabled")
+    else:
+        removed_fal = False
+        if "Cloud: LTX-2 Pro" in models:
+            del models["Cloud: LTX-2 Pro"]
+            removed_fal = True
+        if "Cloud: LTX-2 Pro I2V" in models:
+            del models["Cloud: LTX-2 Pro I2V"]
+            removed_fal = True
+        if removed_fal:
+            changes.append("fal.ai LTX-2 Pro models disabled")
+
+    # Persist to .env
+    if env_updates:
+        _write_env_file(env_updates)
+
+    new_choices = get_available_model_choices()
+    status = "Settings saved. " + (", ".join(changes) if changes else "No changes.")
+    logger.info(status)
+
+    return status, gr.update(choices=new_choices, value=new_choices[0] if new_choices else None)
 
 
 async def _ensure_model_loaded(model_name: str) -> None:
@@ -255,6 +387,9 @@ def main() -> None:
     demo = build_ui(
         generate_fn=generate_video,
         health_check_fn=check_health,
+        save_settings_fn=save_settings,
+        get_model_choices_fn=get_available_model_choices,
+        mask_key_fn=_mask_key,
     )
 
     demo.queue(

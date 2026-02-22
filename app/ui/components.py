@@ -61,7 +61,9 @@ def _format_json(data) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-def build_ui(generate_fn, health_check_fn):
+def build_ui(
+    generate_fn, health_check_fn, save_settings_fn=None, get_model_choices_fn=None, mask_key_fn=None
+):
     """Build and return the Gradio Blocks interface."""
 
     # Wrap generate_fn to convert duration to num_frames and add progress
@@ -113,106 +115,153 @@ def build_ui(generate_fn, health_check_fn):
             "# Xavi9Videos\nAI Video Generation on NVIDIA DGX Spark | Grok - LTX-2 - SVD-XT - Wan 2.1"
         )
 
-        with gr.Row():
-            # Left column: Controls
-            with gr.Column(scale=1):
-                model_selector = gr.Dropdown(
-                    choices=MODEL_CHOICES,
-                    value="LTX-2",
-                    label="Model",
-                    interactive=True,
-                )
-
-                prompt_input = gr.Textbox(
-                    label="Prompt",
-                    placeholder="Describe the video you want to generate...",
-                    lines=3,
-                )
-
-                image_input = gr.Image(
-                    label="Input Image (optional for LTX-2, required for SVD/Cosmos V2W)",
-                    type="pil",
-                )
-
-                with gr.Accordion("Generation Parameters", open=False):
-                    with gr.Row():
-                        width_input = gr.Slider(
-                            256,
-                            1920,
-                            value=settings.default_width,
-                            step=64,
-                            label="Width",
-                        )
-                        height_input = gr.Slider(
-                            256,
-                            1080,
-                            value=settings.default_height,
-                            step=64,
-                            label="Height",
-                        )
-
-                    duration_input = gr.Slider(
-                        0.5,
-                        10.0,
-                        value=round(settings.default_num_frames / settings.default_fps, 1),
-                        step=0.5,
-                        label="Duration (seconds)",
-                    )
-
-                    with gr.Row():
-                        fps_input = gr.Slider(
-                            7,
-                            50,
-                            value=settings.default_fps,
-                            step=1,
-                            label="FPS",
-                        )
-                        steps_input = gr.Slider(
-                            10,
-                            100,
-                            value=settings.default_num_inference_steps,
-                            step=5,
-                            label="Inference Steps",
-                        )
-
-                    guidance_input = gr.Slider(
-                        1.0,
-                        15.0,
-                        value=settings.default_guidance_scale,
-                        step=0.5,
-                        label="Guidance Scale",
-                    )
-
-                    seed_input = gr.Number(
-                        value=-1,
-                        label="Seed (-1 = random)",
-                        precision=0,
-                    )
-
-                generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
-
+        with gr.Tabs():
+            # --- Generate Tab ---
+            with gr.Tab("Generate"):  # noqa: SIM117
                 with gr.Row():
-                    health_btn = gr.Button("Check Model Health", size="sm")
+                    # Left column: Controls
+                    with gr.Column(scale=1):
+                        initial_choices = (
+                            get_model_choices_fn() if get_model_choices_fn else MODEL_CHOICES
+                        )
+                        model_selector = gr.Dropdown(
+                            choices=initial_choices,
+                            value="LTX-2",
+                            label="Model",
+                            interactive=True,
+                        )
 
-                health_output = gr.Textbox(
-                    label="Model Health",
-                    visible=False,
-                    interactive=False,
-                    lines=8,
-                )
+                        prompt_input = gr.Textbox(
+                            label="Prompt",
+                            placeholder="Describe the video you want to generate...",
+                            lines=3,
+                        )
 
-            # Right column: Output
-            with gr.Column(scale=1):
-                video_output = gr.Video(label="Generated Video")
+                        image_input = gr.Image(
+                            label="Input Image (optional for LTX-2, required for SVD/Cosmos V2W)",
+                            type="pil",
+                        )
 
-                with gr.Accordion("Generation Info", open=False):
-                    info_output = gr.Textbox(
-                        label="Metadata",
-                        interactive=False,
-                        lines=6,
+                        with gr.Accordion("Generation Parameters", open=False):
+                            with gr.Row():
+                                width_input = gr.Slider(
+                                    256,
+                                    1920,
+                                    value=settings.default_width,
+                                    step=64,
+                                    label="Width",
+                                )
+                                height_input = gr.Slider(
+                                    256,
+                                    1080,
+                                    value=settings.default_height,
+                                    step=64,
+                                    label="Height",
+                                )
+
+                            duration_input = gr.Slider(
+                                0.5,
+                                10.0,
+                                value=round(settings.default_num_frames / settings.default_fps, 1),
+                                step=0.5,
+                                label="Duration (seconds)",
+                            )
+
+                            with gr.Row():
+                                fps_input = gr.Slider(
+                                    7,
+                                    50,
+                                    value=settings.default_fps,
+                                    step=1,
+                                    label="FPS",
+                                )
+                                steps_input = gr.Slider(
+                                    10,
+                                    100,
+                                    value=settings.default_num_inference_steps,
+                                    step=5,
+                                    label="Inference Steps",
+                                )
+
+                            guidance_input = gr.Slider(
+                                1.0,
+                                15.0,
+                                value=settings.default_guidance_scale,
+                                step=0.5,
+                                label="Guidance Scale",
+                            )
+
+                            seed_input = gr.Number(
+                                value=-1,
+                                label="Seed (-1 = random)",
+                                precision=0,
+                            )
+
+                        generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
+
+                        with gr.Row():
+                            health_btn = gr.Button("Check Model Health", size="sm")
+
+                        health_output = gr.Textbox(
+                            label="Model Health",
+                            visible=False,
+                            interactive=False,
+                            lines=8,
+                        )
+
+                    # Right column: Output
+                    with gr.Column(scale=1):
+                        video_output = gr.Video(label="Generated Video")
+
+                        with gr.Accordion("Generation Info", open=False):
+                            info_output = gr.Textbox(
+                                label="Metadata",
+                                interactive=False,
+                                lines=6,
+                            )
+
+                        status_output = gr.Textbox(
+                            label="Status",
+                            interactive=False,
+                            max_lines=3,
+                        )
+
+            # --- Settings Tab ---
+            with gr.Tab("Settings"):
+                _mask = mask_key_fn if mask_key_fn else lambda k: ""
+
+                with gr.Accordion("API Keys", open=True):
+                    grok_api_key_input = gr.Textbox(
+                        value=_mask(settings.grok_api_key),
+                        label="Grok API Key (xAI)",
+                        type="password",
+                        placeholder="Enter your xAI API key...",
+                    )
+                    fal_api_key_input = gr.Textbox(
+                        value=_mask(settings.fal_api_key),
+                        label="fal.ai API Key",
+                        type="password",
+                        placeholder="Enter your fal.ai API key...",
+                    )
+                    ngc_api_key_input = gr.Textbox(
+                        value=_mask(settings.ngc_api_key),
+                        label="NGC API Key",
+                        type="password",
+                        placeholder="Enter your NGC API key...",
                     )
 
-                status_output = gr.Textbox(
+                with gr.Accordion("Paths", open=True):
+                    models_dir_input = gr.Textbox(
+                        value=str(settings.models_dir),
+                        label="Models Directory",
+                    )
+                    outputs_dir_input = gr.Textbox(
+                        value=str(settings.outputs_dir),
+                        label="Outputs Directory",
+                    )
+
+                save_btn = gr.Button("Save Settings", variant="primary")
+                settings_status = gr.Textbox(
                     label="Status",
                     interactive=False,
                     max_lines=3,
@@ -274,5 +323,18 @@ def build_ui(generate_fn, health_check_fn):
             inputs=[],
             outputs=[health_output],
         )
+
+        if save_settings_fn:
+            save_btn.click(
+                fn=save_settings_fn,
+                inputs=[
+                    grok_api_key_input,
+                    fal_api_key_input,
+                    ngc_api_key_input,
+                    models_dir_input,
+                    outputs_dir_input,
+                ],
+                outputs=[settings_status, model_selector],
+            )
 
     return demo
