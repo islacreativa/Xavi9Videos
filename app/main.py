@@ -35,6 +35,7 @@ from app.models import (  # noqa: E402
     generation_lock,
 )
 from app.models.cosmos import CosmosText2World, CosmosVideo2World  # noqa: E402
+from app.models.fal_kling import FalKlingImageToVideo, FalKlingTextToVideo  # noqa: E402
 from app.models.fal_ltx2 import FalLTX2ImageToVideo, FalLTX2TextToVideo  # noqa: E402
 from app.models.grok import GrokVideoModel  # noqa: E402
 from app.models.ltx2 import LTX2Model  # noqa: E402
@@ -98,11 +99,13 @@ else:
 
 # fal.ai LTX-2 Pro cloud models (requires fal.ai API key)
 if settings.fal_api_key:
+    models["Cloud: Kling v3"] = FalKlingTextToVideo()
+    models["Cloud: Kling v3 I2V"] = FalKlingImageToVideo()
     models["Cloud: LTX-2 Pro"] = FalLTX2TextToVideo()
     models["Cloud: LTX-2 Pro I2V"] = FalLTX2ImageToVideo()
-    logger.info("fal.ai LTX-2 Pro models enabled (cloud)")
+    logger.info("fal.ai cloud models enabled (Kling v3, LTX-2 Pro)")
 else:
-    logger.info("fal.ai LTX-2 Pro models disabled (FAL_API_KEY not set)")
+    logger.info("fal.ai cloud models disabled (FAL_API_KEY not set)")
 
 # Local models always available
 models["LTX-2"] = LTX2Model()
@@ -113,9 +116,12 @@ models["Wan 2.1"] = WanModel()
 _current_local_model: str | None = None
 
 
+_SETTINGS_ENV_PATH = Path("/app/outputs/.settings.env")
+
+
 def _write_env_file(updates: dict[str, str]) -> None:
-    """Read existing .env, update/add keys, write back."""
-    env_path = Path(".env")
+    """Write settings to persistent .env on outputs volume."""
+    env_path = _SETTINGS_ENV_PATH
     lines: list[str] = []
     existing_keys: set[str] = set()
 
@@ -134,7 +140,48 @@ def _write_env_file(updates: dict[str, str]) -> None:
         if key not in existing_keys:
             lines.append(f"{key}={value}")
 
+    env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.write_text("\n".join(lines) + "\n")
+
+
+def _load_persistent_settings() -> None:
+    """Load saved settings from persistent volume on startup."""
+    if not _SETTINGS_ENV_PATH.exists():
+        return
+
+    for line in _SETTINGS_ENV_PATH.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not value:
+            continue
+        # Only load keys not already set via environment
+        if not os.environ.get(key):
+            os.environ[key] = value
+            if key == "GROK_API_KEY":
+                settings.grok_api_key = value
+            elif key == "FAL_API_KEY":
+                settings.fal_api_key = value
+            elif key == "NGC_API_KEY":
+                settings.ngc_api_key = value
+
+    # Register cloud models based on loaded keys
+    if settings.grok_api_key and "Cloud: Grok Video" not in models:
+        models["Cloud: Grok Video"] = GrokVideoModel()
+        logger.info("Grok Video model enabled (from saved settings)")
+    if settings.fal_api_key and "Cloud: LTX-2 Pro" not in models:
+        models["Cloud: Kling v3"] = FalKlingTextToVideo()
+        models["Cloud: Kling v3 I2V"] = FalKlingImageToVideo()
+        models["Cloud: LTX-2 Pro"] = FalLTX2TextToVideo()
+        models["Cloud: LTX-2 Pro I2V"] = FalLTX2ImageToVideo()
+        logger.info("fal.ai cloud models enabled (from saved settings)")
+
+
+# Load API keys saved from Settings UI (persisted on outputs volume)
+_load_persistent_settings()
 
 
 def get_available_model_choices() -> list[str]:
@@ -218,19 +265,24 @@ def save_settings(
 
     if settings.fal_api_key:
         if "Cloud: LTX-2 Pro" not in models:
+            models["Cloud: Kling v3"] = FalKlingTextToVideo()
+            models["Cloud: Kling v3 I2V"] = FalKlingImageToVideo()
             models["Cloud: LTX-2 Pro"] = FalLTX2TextToVideo()
             models["Cloud: LTX-2 Pro I2V"] = FalLTX2ImageToVideo()
-            changes.append("fal.ai LTX-2 Pro models enabled")
+            changes.append("fal.ai cloud models enabled")
     else:
         removed_fal = False
-        if "Cloud: LTX-2 Pro" in models:
-            del models["Cloud: LTX-2 Pro"]
-            removed_fal = True
-        if "Cloud: LTX-2 Pro I2V" in models:
-            del models["Cloud: LTX-2 Pro I2V"]
-            removed_fal = True
+        for fal_name in [
+            "Cloud: Kling v3",
+            "Cloud: Kling v3 I2V",
+            "Cloud: LTX-2 Pro",
+            "Cloud: LTX-2 Pro I2V",
+        ]:
+            if fal_name in models:
+                del models[fal_name]
+                removed_fal = True
         if removed_fal:
-            changes.append("fal.ai LTX-2 Pro models disabled")
+            changes.append("fal.ai cloud models disabled")
 
     # Persist to .env
     if env_updates:
@@ -240,7 +292,20 @@ def save_settings(
     status = "Settings saved. " + (", ".join(changes) if changes else "No changes.")
     logger.info(status)
 
-    return status, gr.update(choices=new_choices, value=new_choices[0] if new_choices else None)
+    return status, gr.Dropdown(choices=new_choices, value=new_choices[0] if new_choices else None)
+
+
+def get_current_settings() -> tuple:
+    """Return current settings values for UI refresh on page load."""
+    choices = get_available_model_choices()
+    return (
+        gr.Dropdown(choices=choices, value="LTX-2" if "LTX-2" in choices else choices[0]),
+        _mask_key(settings.grok_api_key),
+        _mask_key(settings.fal_api_key),
+        _mask_key(settings.ngc_api_key),
+        str(settings.models_dir),
+        str(settings.outputs_dir),
+    )
 
 
 async def _ensure_model_loaded(model_name: str) -> None:
@@ -390,6 +455,7 @@ def main() -> None:
         save_settings_fn=save_settings,
         get_model_choices_fn=get_available_model_choices,
         mask_key_fn=_mask_key,
+        get_current_settings_fn=get_current_settings,
     )
 
     demo.queue(

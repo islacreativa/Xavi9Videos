@@ -70,7 +70,7 @@ class GrokVideoModel(BaseVideoModel):
             raise ValueError("Grok Video requires a text prompt or an input image.")
 
         payload: dict = {
-            "model": "grok-2-image",
+            "model": "grok-imagine-video",
             "prompt": request.prompt or "Generate a video from this image",
         }
 

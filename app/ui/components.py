@@ -12,6 +12,8 @@ MODEL_CHOICES = [
     "Cosmos Text2World",
     "Cosmos Video2World",
     "Cloud: Grok Video",
+    "Cloud: Kling v3",
+    "Cloud: Kling v3 I2V",
     "Cloud: LTX-2 Pro",
     "Cloud: LTX-2 Pro I2V",
     "LTX-2",
@@ -20,12 +22,18 @@ MODEL_CHOICES = [
 ]
 
 # Models that require an image
-IMAGE_REQUIRED_MODELS = {"Cosmos Video2World", "Cloud: LTX-2 Pro I2V", "SVD-XT"}
+IMAGE_REQUIRED_MODELS = {
+    "Cosmos Video2World",
+    "Cloud: Kling v3 I2V",
+    "Cloud: LTX-2 Pro I2V",
+    "SVD-XT",
+}
 # Models that support text prompts
 TEXT_MODELS = {
     "Cosmos Text2World",
     "Cosmos Video2World",
     "Cloud: Grok Video",
+    "Cloud: Kling v3",
     "Cloud: LTX-2 Pro",
     "LTX-2",
     "Wan 2.1",
@@ -62,7 +70,12 @@ def _format_json(data) -> str:
 
 
 def build_ui(
-    generate_fn, health_check_fn, save_settings_fn=None, get_model_choices_fn=None, mask_key_fn=None
+    generate_fn,
+    health_check_fn,
+    save_settings_fn=None,
+    get_model_choices_fn=None,
+    mask_key_fn=None,
+    get_current_settings_fn=None,
 ):
     """Build and return the Gradio Blocks interface."""
 
@@ -105,7 +118,7 @@ def build_ui(
     # Wrap health_check to return JSON string
     async def wrapped_health():
         result = await health_check_fn()
-        return gr.update(value=_format_json(result), visible=True)
+        return gr.Textbox(value=_format_json(result), visible=True)
 
     with gr.Blocks(
         title="Xavi9Videos - AI Video Generation",
@@ -271,8 +284,8 @@ def build_ui(
         def on_model_change(model_name):
             vis = update_ui_visibility(model_name)
             return [
-                gr.update(visible=vis["prompt_visible"]),
-                gr.update(
+                gr.Textbox(visible=vis["prompt_visible"]),
+                gr.Image(
                     visible=vis["image_visible"],
                     label=(
                         "Input Image (required)"
@@ -280,11 +293,11 @@ def build_ui(
                         else "Input Image (optional)"
                     ),
                 ),
-                gr.update(visible=vis["resolution_visible"]),
-                gr.update(visible=vis["resolution_visible"]),
-                gr.update(visible=vis["frames_visible"]),
-                gr.update(visible=vis["fps_visible"]),
-                gr.update(visible=vis["guidance_visible"]),
+                gr.Slider(visible=vis["resolution_visible"]),
+                gr.Slider(visible=vis["resolution_visible"]),
+                gr.Slider(visible=vis["frames_visible"]),
+                gr.Slider(visible=vis["fps_visible"]),
+                gr.Slider(visible=vis["guidance_visible"]),
             ]
 
         model_selector.change(
@@ -335,6 +348,20 @@ def build_ui(
                     outputs_dir_input,
                 ],
                 outputs=[settings_status, model_selector],
+            )
+
+        if get_current_settings_fn:
+            demo.load(
+                fn=get_current_settings_fn,
+                inputs=[],
+                outputs=[
+                    model_selector,
+                    grok_api_key_input,
+                    fal_api_key_input,
+                    ngc_api_key_input,
+                    models_dir_input,
+                    outputs_dir_input,
+                ],
             )
 
     return demo

@@ -1,4 +1,4 @@
-"""fal.ai LTX-2 Pro cloud video generation models."""
+"""fal.ai Kling v3 Pro cloud video generation models."""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ from app.models.fal_base import FalBaseModel
 logger = logging.getLogger(__name__)
 
 
-class FalLTX2TextToVideo(FalBaseModel):
-    """LTX-2 Pro text-to-video via fal.ai."""
+class FalKlingTextToVideo(FalBaseModel):
+    """Kling v3 Pro text-to-video via fal.ai."""
 
     def __init__(self) -> None:
-        super().__init__("/fal-ai/ltx-2/text-to-video")
+        super().__init__("/fal-ai/kling-video/v3/pro/text-to-video")
 
     @property
     def name(self) -> str:
-        return "Cloud: LTX-2 Pro"
+        return "Cloud: Kling v3"
 
     @property
     def supported_modes(self) -> list[ModelMode]:
@@ -35,22 +35,19 @@ class FalLTX2TextToVideo(FalBaseModel):
         self, request: GenerationRequest, progress_callback=None
     ) -> GenerationResult:
         if not request.prompt:
-            raise ValueError("LTX-2 Pro text-to-video requires a text prompt.")
+            raise ValueError("Kling v3 Pro text-to-video requires a text prompt.")
 
         payload: dict = {
             "prompt": request.prompt,
-            "num_frames": request.num_frames,
-            "width": request.width,
-            "height": request.height,
-            "num_inference_steps": request.num_inference_steps,
-            "guidance_scale": request.guidance_scale,
+            "duration": "5",
+            "aspect_ratio": "16:9",
         }
         if request.seed >= 0:
             payload["seed"] = request.seed
 
         start = time.time()
         request_id = await self._submit(payload)
-        logger.info("fal.ai LTX-2 T2V: submitted %s, polling...", request_id)
+        logger.info("fal.ai Kling T2V: submitted %s, polling...", request_id)
 
         result_data = await self._poll_result(request_id)
         elapsed = time.time() - start
@@ -60,7 +57,7 @@ class FalLTX2TextToVideo(FalBaseModel):
         if not video_url:
             raise RuntimeError("fal.ai response missing video URL")
 
-        output_path = await self._download_video(video_url, "fal_ltx2_t2v")
+        output_path = await self._download_video(video_url, "fal_kling_t2v")
 
         metadata: dict = {"prompt": request.prompt}
         if "duration" in video_info:
@@ -75,15 +72,15 @@ class FalLTX2TextToVideo(FalBaseModel):
         )
 
 
-class FalLTX2ImageToVideo(FalBaseModel):
-    """LTX-2 Pro image-to-video via fal.ai."""
+class FalKlingImageToVideo(FalBaseModel):
+    """Kling v3 Pro image-to-video via fal.ai."""
 
     def __init__(self) -> None:
-        super().__init__("/fal-ai/ltx-2/image-to-video")
+        super().__init__("/fal-ai/kling-video/v3/pro/image-to-video")
 
     @property
     def name(self) -> str:
-        return "Cloud: LTX-2 Pro I2V"
+        return "Cloud: Kling v3 I2V"
 
     @property
     def supported_modes(self) -> list[ModelMode]:
@@ -93,28 +90,24 @@ class FalLTX2ImageToVideo(FalBaseModel):
         self, request: GenerationRequest, progress_callback=None
     ) -> GenerationResult:
         if request.image is None:
-            raise ValueError("LTX-2 Pro image-to-video requires an input image.")
+            raise ValueError("Kling v3 Pro image-to-video requires an input image.")
 
-        # Encode image as base64 data URI
         buf = io.BytesIO()
         request.image.save(buf, format="PNG")
         image_b64 = base64.b64encode(buf.getvalue()).decode()
 
         payload: dict = {
             "prompt": request.prompt or "",
-            "image_url": f"data:image/png;base64,{image_b64}",
-            "num_frames": request.num_frames,
-            "width": request.width,
-            "height": request.height,
-            "num_inference_steps": request.num_inference_steps,
-            "guidance_scale": request.guidance_scale,
+            "start_image_url": f"data:image/png;base64,{image_b64}",
+            "duration": "5",
+            "aspect_ratio": "16:9",
         }
         if request.seed >= 0:
             payload["seed"] = request.seed
 
         start = time.time()
         request_id = await self._submit(payload)
-        logger.info("fal.ai LTX-2 I2V: submitted %s, polling...", request_id)
+        logger.info("fal.ai Kling I2V: submitted %s, polling...", request_id)
 
         result_data = await self._poll_result(request_id)
         elapsed = time.time() - start
@@ -124,7 +117,7 @@ class FalLTX2ImageToVideo(FalBaseModel):
         if not video_url:
             raise RuntimeError("fal.ai response missing video URL")
 
-        output_path = await self._download_video(video_url, "fal_ltx2_i2v")
+        output_path = await self._download_video(video_url, "fal_kling_i2v")
 
         metadata: dict = {"prompt": request.prompt or ""}
         if "duration" in video_info:
